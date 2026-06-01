@@ -3,6 +3,7 @@ package hooks_test
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -16,20 +17,32 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+type mockCommand struct {
+	executedCommands [][]string
+}
+
+func (m *mockCommand) Execute(dir string, stdout io.Writer, stderr io.Writer, program string, args ...string) error {
+	m.executedCommands = append(m.executedCommands, append([]string{program}, args...))
+	return nil
+}
+
 var _ = Describe("contrastSecurityHook", func() {
 	var (
 		buffer   *bytes.Buffer
 		logger   *libbuildpack.Logger
 		contrast hooks.ContrastSecurityHook
 		stager   *libbuildpack.Stager
+		mock     *mockCommand
 	)
 
 	BeforeEach(func() {
 		buffer = new(bytes.Buffer)
 		logger = libbuildpack.NewLogger(buffer)
+		mock = &mockCommand{}
 
 		contrast = hooks.ContrastSecurityHook{
-			Log: logger,
+			Log:     logger,
+			Command: mock,
 		}
 	})
 
@@ -95,8 +108,15 @@ var _ = Describe("contrastSecurityHook", func() {
 				var sampleExportList string = "export CONTRAST__API__API_KEY=sample_api_key\n" +
 					"export CONTRAST__API__URL=sample_teamserver_url/Contrast/\n" +
 					"export CONTRAST__API__SERVICE_KEY=sample_service_key\n" +
-					"export CONTRAST__API__USER_NAME=username@example.com\n"
+					"export CONTRAST__API__USER_NAME=username@example.com\n" +
+					"export NODE_OPTIONS=\"${NODE_OPTIONS} --import @contrast/agent\"\n"
 				Expect(fileContents).To(Equal(sampleExportList))
+			})
+
+			It("installs @contrast/agent via npm", func() {
+				err := contrast.AfterCompile(stager)
+				Expect(err).To(BeNil())
+				Expect(mock.executedCommands).To(ContainElement([]string{"npm", "install", "@contrast/agent"}))
 			})
 
 		})
@@ -152,7 +172,8 @@ var _ = Describe("contrastSecurityHook", func() {
 				var sampleExportList string = "export CONTRAST__API__API_KEY=sample_api_key\n" +
 					"export CONTRAST__API__URL=sample_teamserver_url/Contrast/\n" +
 					"export CONTRAST__API__SERVICE_KEY=sample_service_key\n" +
-					"export CONTRAST__API__USER_NAME=username@example.com\n"
+					"export CONTRAST__API__USER_NAME=username@example.com\n" +
+					"export NODE_OPTIONS=\"${NODE_OPTIONS} --import @contrast/agent\"\n"
 				Expect(fileContents).To(Equal(sampleExportList))
 			})
 		})

@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"strings"
 
@@ -10,7 +11,8 @@ import (
 
 type ContrastSecurityHook struct {
 	libbuildpack.DefaultHook
-	Log *libbuildpack.Logger
+	Log     *libbuildpack.Logger
+	Command Command
 }
 
 type ContrastSecurityCredentials struct {
@@ -23,9 +25,11 @@ type ContrastSecurityCredentials struct {
 
 func init() {
 	logger := libbuildpack.NewLogger(os.Stdout)
+	command := &libbuildpack.Command{}
 
 	libbuildpack.AddHook(ContrastSecurityHook{
-		Log: logger,
+		Log:     logger,
+		Command: command,
 	})
 }
 
@@ -41,10 +45,17 @@ func (h ContrastSecurityHook) AfterCompile(stager *libbuildpack.Stager) error {
 
 	h.Log.Info("Contrast Security credentials found. Configuring environment for [%s].", contrastSecurityCredentials.ContrastUrl)
 
+	h.Log.Info("Contrast Security installing @contrast/agent")
+	if err := h.Command.Execute(stager.BuildDir(), io.Discard, io.Discard, "npm", "install", "@contrast/agent"); err != nil {
+		h.Log.Error("Contrast Security failed to install @contrast/agent: %s", err.Error())
+		return err
+	}
+
 	var contrastSecurityScript = "export CONTRAST__API__API_KEY=" + contrastSecurityCredentials.ApiKey + "\n" +
 		"export CONTRAST__API__URL=" + contrastSecurityCredentials.ContrastUrl + "/Contrast/\n" +
 		"export CONTRAST__API__SERVICE_KEY=" + contrastSecurityCredentials.ServiceKey + "\n" +
-		"export CONTRAST__API__USER_NAME=" + contrastSecurityCredentials.Username + "\n"
+		"export CONTRAST__API__USER_NAME=" + contrastSecurityCredentials.Username + "\n" +
+		"export NODE_OPTIONS=\"${NODE_OPTIONS} --import @contrast/agent\"\n"
 
 	stager.WriteProfileD("contrast_security", contrastSecurityScript)
 
