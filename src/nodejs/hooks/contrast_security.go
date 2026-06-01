@@ -2,7 +2,6 @@ package hooks
 
 import (
 	"encoding/json"
-	"io"
 	"os"
 	"strings"
 
@@ -46,7 +45,7 @@ func (h ContrastSecurityHook) AfterCompile(stager *libbuildpack.Stager) error {
 	h.Log.Info("Contrast Security credentials found. Configuring environment for [%s].", contrastSecurityCredentials.ContrastUrl)
 
 	h.Log.Info("Contrast Security installing @contrast/agent")
-	if err := h.Command.Execute(stager.BuildDir(), io.Discard, io.Discard, "npm", "install", "@contrast/agent"); err != nil {
+	if err := h.Command.Execute(stager.BuildDir(), os.Stdout, os.Stderr, "npm", "install", "@contrast/agent"); err != nil {
 		h.Log.Error("Contrast Security failed to install @contrast/agent: %s", err.Error())
 		return err
 	}
